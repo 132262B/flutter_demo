@@ -103,6 +103,57 @@ class _FogOfWarMapState extends State<FogOfWarMap> {
     return true;
   }
 
+  bool _isRevealed(LatLng point) {
+    for (final existing in _visitedPoints) {
+      if (_distance.as(LengthUnit.Meter, existing, point) <
+          _revealRadiusMeters) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _forceAddPoint(LatLng point) {
+    final locationPoint = LocationPoint(
+      latitude: point.latitude,
+      longitude: point.longitude,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    );
+    _dbService.insertPoint(locationPoint);
+    setState(() {
+      _visitedPoints.add(point);
+    });
+  }
+
+  Future<void> _onMapTap(TapPosition tapPosition, LatLng point) async {
+    if (_isRevealed(point)) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('이 지역을 밝히시겠습니까?'),
+        content: Text(
+          '위도: ${point.latitude.toStringAsFixed(4)}\n'
+          '경도: ${point.longitude.toStringAsFixed(4)}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('아니오'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('예'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _forceAddPoint(point);
+    }
+  }
+
   Widget _zoomButton(IconData icon, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -189,6 +240,7 @@ class _FogOfWarMapState extends State<FogOfWarMap> {
           interactionOptions: const InteractionOptions(
             flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
           ),
+          onTap: _onMapTap,
           onPositionChanged: (camera, hasGesture) {
             if (_currentZoom != camera.zoom) {
               setState(() {
